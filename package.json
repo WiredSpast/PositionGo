@@ -1,0 +1,23 @@
+{
+  "name": "positiongo",
+  "version": "1.0.0",
+  "description": "Save and load positions to move to in a room.",
+  "main": "posgo.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iUseYahoo/G-Earth-Extensions.git#main"
+  },
+  "author": "iUseYahoo",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/iUseYahoo/G-Earth-Extensions/issues"
+  },
+  "homepage": "https://github.com/iUseYahoo/G-Earth-Extensions/tree/main#readme",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "gnode-api": "^0.2.9"
+  }
+}
