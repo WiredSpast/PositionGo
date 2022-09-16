@@ -4,7 +4,7 @@ import fs from "fs";
 const extensionInfo = {
 	name: "PositionGo",
 	description: "Go to saved room positions.",
-	version: "1.0.0",
+	version: "1.0.1",
 	author: "floppidity"
 };
   
@@ -13,8 +13,10 @@ ext.run();
 
 let roomID = 0; // store room id on load
 let status = false;
-let positions = JSON.parse(fs.readFileSync("./locations.json", "utf8")); // load positions file
-console.log(positions);
+let positions = [];
+if (fs.existsSync("./locations.json")) {
+	positions = JSON.parse(fs.readFileSync("./locations.json", "utf8")); // load positions file
+}
 let posName = "";
 
 
@@ -23,16 +25,17 @@ function silentMsg(message) {
 }
 
 function savePos(rid, name, x, y) {
-	positions[rid] = {
-		[name]: {
-			'x': x,
-			'y': y
-		}
-	}
+    positions[rid] = {
+        ...(positions[rid] || {}),
+        [name]: {
+            'x': x,
+            'y': y
+        }
+    }
 
-	fs.writeFileSync("./locations.json", JSON.stringify(positions, null, 2), "utf8");
-	silentMsg(`Saved position \n${name} in room ${rid}.`);
-	posName = "";
+    fs.writeFileSync("./locations.json", JSON.stringify(positions, null, 2), "utf8");
+    silentMsg(`Saved position \n${name} in room ${rid}.`);
+    posName = "";
 }
 
 ext.interceptByNameOrHash(HDirection.TOSERVER, "Chat", hMsg => {
@@ -71,9 +74,7 @@ ext.interceptByNameOrHash(HDirection.TOSERVER, "Chat", hMsg => {
 	if (args[0].toLowerCase() === "/reload") {
 		hMsg.blocked = true;
 
-		if (roomID == 0) return silentMsg("Please reload the room to get the room id.");
-
-		ext.sendToServer(new HPacket(`{out:GetGuestRoom}{i:${roomID}}{i:0}{i:1}`));
+		ext.sendToServer(new HPacket("{out:GetHeightMap}"));
 	}
 
 	if (args[0].toLowerCase() === "/help") {
@@ -105,5 +106,5 @@ ext.interceptByNameOrHash(HDirection.TOSERVER, "MoveAvatar", hPos => {
 })
 
 ext.on("connect", () => {
-	silentMsg("PositionGo loaded.\nUse /help for commands.");
+	ext.sendToClient(new HPacket(`{in:NotificationDialog}{s:\"\"}{i:3}{s:\"display\"}{s:\"BUBBLE\"}{s:\"message\"}{s:\"PositionGo loaded. Use /help for commands.\"}{s:\"image\"}{s:\"https://raw.githubusercontent.com/iUseYahoo/G-ExtensionStore/repo/1.5.2/store/extensions/PositionGo/icon.png\"}`));
 })
