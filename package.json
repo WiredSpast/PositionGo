@@ -1,6 +1,6 @@
 {
-  "name": "positiongo",
-  "version": "1.0.0",
+  "name": "PositionGo",
+  "version": "1.0.1",
   "description": "Save and load positions to move to in a room.",
   "main": "posgo.js",
   "type": "module",
