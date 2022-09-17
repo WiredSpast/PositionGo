@@ -1,4 +1,4 @@
-import { Extension, HPacket, HDirection, HMessage } from "gnode-api";
+import { Extension, HPacket, HDirection, GAsync, AwaitingPacket } from "gnode-api";
 import fs from "fs";
 
 const extensionInfo = {
@@ -8,12 +8,13 @@ const extensionInfo = {
 	author: "floppidity"
 };
   
-let ext = new Extension(extensionInfo);
+const ext = new Extension(extensionInfo);
+const gAsync = new GAsync(ext);
 ext.run();
 
 let roomID = 0; // store room id on load
-let status = false;
-let positions = [];
+
+let positions = {};
 if (fs.existsSync("./locations.json")) {
 	positions = JSON.parse(fs.readFileSync("./locations.json", "utf8")); // load positions file
 }
@@ -21,7 +22,7 @@ let posName = "";
 
 
 function silentMsg(message) {
-	ext.sendToClient(new HPacket(`{in:Chat}{i:-1}{s:"${message}"}{i:0}{i:23}{i:0}{i:-1}`))
+	ext.sendToClient(new HPacket(`{in:Chat}{i:-1}{s:"${message}"}{i:0}{i:23}{i:0}{i:-1}`));
 }
 
 function savePos(rid, name, x, y) {
@@ -31,7 +32,7 @@ function savePos(rid, name, x, y) {
             'x': x,
             'y': y
         }
-    }
+    };
 
     fs.writeFileSync("./locations.json", JSON.stringify(positions, null, 2), "utf8");
     silentMsg(`Saved position \n${name} in room ${rid}.`);
@@ -39,72 +40,67 @@ function savePos(rid, name, x, y) {
 }
 
 ext.interceptByNameOrHash(HDirection.TOSERVER, "Chat", hMsg => {
-	const packet = hMsg.getPacket();
-	const message = packet.readString();
-	let args = message.split(" ");
+	const args = hMsg.getPacket().readString().split(" ");
 
-	if (args[0].toLowerCase() === "/save") {
-		hMsg.blocked = true;
+	hMsg.blocked = true;
 
-		if (!args[1]) return silentMsg("Please specify a name for the position.");
-		if (roomID == 0) return silentMsg("Please reload the room.");
-
-		silentMsg("Click on the tile you want to save.");
-
-		posName = args[1];
-		status = true;
+	switch(args[0].toLowerCase()) {
+		case "/save":
+			saveTile(args[1]);
+			break;
+		case "/load":
+			loadTile(args[1]);
+			break;
+		case "/reload":
+			reloadRoom();
+			break;
+		case "/help":
+			sendHelpMessage();
+			break;
+		default:
+			hMsg.blocked = false;
+			break;
 	}
+});
 
-	if (args[0].toLowerCase() === "/load") {
-		hMsg.blocked = true;
+async function saveTile(name) {
+	if (!name) return silentMsg("Please specify a position name.");
+	if (roomID == 0) return silentMsg("Please reload the room");
 
-		if (!args[1]) return silentMsg("Please specify a position name.");
-		if (roomID == 0) return silentMsg("Please reload the room.");
-		
-		if (!positions[roomID]) return silentMsg(`No positions are saved in this room.\nUse /help.`);
-		if (!positions[roomID][args[1]]) return silentMsg(`Position name ${args[1]} in this room does not exist.\nUse /help.`);
+	silentMsg("Click on the tile you want to save.");
 
-		let posName = args[1];
-		let xPos = positions[roomID][posName].x;
-		let yPos = positions[roomID][posName].y;
+	let movementPacket = await gAsync.awaitPacket(new AwaitingPacket("MoveAvatar", HDirection.TOSERVER, 30000, true));
 
-		ext.sendToServer(new HPacket(`{out:MoveAvatar}{i:${xPos}}{i:${yPos}}`));
-	}
+	if (movementPacket == null) return silentMsg("You haven't clicked a tile in 30 seconds, save cancelled!");
 
-	if (args[0].toLowerCase() === "/reload") {
-		hMsg.blocked = true;
+	savePos(roomID, name, ...movementPacket.read('ii'));
+}
 
-		ext.sendToServer(new HPacket("{out:GetHeightMap}"));
-	}
+function loadTile(name) {
+	if (!name) return silentMsg("Please specify a position name.");
+	if (roomID == 0) return silentMsg("Please reload the room");
 
-	if (args[0].toLowerCase() === "/help") {
-		hMsg.blocked = true;
+	let position = positions[roomID] ? positions[roomID][name] : undefined;
+	if (!position) return silentMsg(`Position name ${name} in this room does not exist.\nUse /help.`);
 
-		silentMsg("Commands:\n/save [name] - save position\n/load [name] - load position\n/reload - reload room\n/help - show this message");
-	}
-})
+	ext.sendToServer(new HPacket(`{out:MoveAvatar}{i:${position.x}}{i:${position.y}}`));
+}
 
+function reloadRoom() {
+	ext.sendToServer(new HPacket("{out:GetHeightMap}"));
+}
+
+function sendHelpMessage() {
+	silentMsg("Commands:\n/save [name] - save position\n/load [name] - load position\n/reload - reload room\n/help - show this message");
+}
 
 // {out:GetGuestRoom}{i:78366729}{i:0}{i:1}
 ext.interceptByNameOrHash(HDirection.TOSERVER, "GetGuestRoom", hRoom => {
 	const packet = hRoom.getPacket();
 	roomID = packet.readInteger();
 	silentMsg(`RoomID stored: ${roomID}`);
-})
-
-
-ext.interceptByNameOrHash(HDirection.TOSERVER, "MoveAvatar", hPos => {
-	const packet = hPos.getPacket();
-	
-	if (status == true) {
-		const x = packet.readInteger();
-		const y = packet.readInteger();
-
-		status = false;
-		savePos(roomID, posName, x, y);
-	} 
-})
+});
 
 ext.on("connect", () => {
 	ext.sendToClient(new HPacket(`{in:NotificationDialog}{s:\"\"}{i:3}{s:\"display\"}{s:\"BUBBLE\"}{s:\"message\"}{s:\"PositionGo loaded. Use /help for commands.\"}{s:\"image\"}{s:\"https://raw.githubusercontent.com/iUseYahoo/G-ExtensionStore/repo/1.5.2/store/extensions/PositionGo/icon.png\"}`));
-})
+});
