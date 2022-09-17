@@ -71,7 +71,7 @@ async function saveTile(name) {
 
 	let movementPacket = await gAsync.awaitPacket(new AwaitingPacket("MoveAvatar", HDirection.TOSERVER, 30000, true));
 
-	if (movementPacket == null) return silentMsg("You haven't clicked a tile in 30 seconds, save cancelled!");
+	if (!movementPacket) return silentMsg("You haven't clicked a tile in 30 seconds, save cancelled!");
 
 	savePos(roomID, name, ...movementPacket.read('ii'));
 }
